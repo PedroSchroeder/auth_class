@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Security, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_azure_auth import SingleTenantAzureAuthorizationCodeBearer
+from fastapi_azure_auth.exceptions import InvalidAuth
 from fastapi_azure_auth.user import User
 from pydantic import AnyHttpUrl, BaseSettings
 
@@ -75,12 +76,19 @@ async def load_config() -> None:
     """
     await azure_scheme.openid_config.load_config()
 
+def validate_user(expected_role: str):
+    def role_checker(user: User = Depends(azure_scheme)):
+        if expected_role in user.roles:
+            return user
+        raise InvalidAuth(f"User does not have the required role: {expected_role}")
+
+    return role_checker
 
 
 @app.get("/sge")
-async def sge(user: User = Depends(azure_scheme)):
+async def sge(user: User = Depends(validate_user("sge"))):
     return user.dict()
 
 @app.get("/nw")
-async def nw(user: User = Depends(azure_scheme)):
+async def nw(user: User = Depends(validate_user("nw"))):
     return user.dict()
